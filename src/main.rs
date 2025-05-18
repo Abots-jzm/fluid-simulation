@@ -3,6 +3,7 @@ use macroquad::prelude::*;
 mod boundary;
 mod config;
 mod fluid;
+mod grid;
 mod particle;
 mod simulation;
 
@@ -25,6 +26,17 @@ async fn main() {
         simulation.handle_input();
         simulation.update(get_frame_time());
         simulation.render();
+        //print fps top right
+        let fps = get_fps();
+        let screen_width = screen_width();
+        draw_text(
+            &format!("FPS: {}", fps),
+            screen_width - 100.0,
+            20.0,
+            20.0,
+            WHITE,
+        );
+
         next_frame().await
     }
 }

@@ -3,16 +3,17 @@ use std::f32::consts::PI;
 use macroquad::prelude::*;
 use rayon::prelude::*;
 
-use crate::{config::Config, particle::Particle, simulation::DISTANCE_ZOOM};
-
-#[allow(dead_code)]
-pub enum FluidSpawnMode {
-    Random,
-    Grid,
-}
+use crate::{
+    config::{Config, FluidSpawnMode},
+    grid::GridBox,
+    particle::Particle,
+    simulation::DISTANCE_ZOOM,
+};
 
 pub struct Fluid {
-    pub particles: Vec<Particle>,
+    pub grid: Vec<GridBox>,
+    grid_cols: usize,
+    grid_rows: usize,
 }
 
 impl Fluid {
@@ -50,67 +51,248 @@ impl Fluid {
             }
         }
 
-        Self { particles }
+        let grid_size = config.smoothing_radius;
+        let grid_cols = (screen_width() / grid_size).ceil() as usize;
+        let grid_rows = (screen_height() / grid_size).ceil() as usize;
+
+        let mut grid = Vec::with_capacity(grid_cols * grid_rows);
+        for i in 0..grid_rows {
+            for j in 0..grid_cols {
+                let x = j as f32 * grid_size;
+                let y = i as f32 * grid_size;
+                grid.push(GridBox::new(grid_size, Vec2::new(x, y)));
+            }
+        }
+
+        for particle in &particles {
+            let grid_x = (particle.position.x / grid_size).floor() as usize;
+            let grid_y = (particle.position.y / grid_size).floor() as usize;
+            let index = grid_y * grid_cols + grid_x;
+
+            if index < grid.len() {
+                grid[index].add_particle(particle.clone());
+            }
+        }
+
+        Self {
+            grid,
+            grid_cols,
+            grid_rows,
+        }
     }
 
     pub fn draw(&self) {
-        for particle in &self.particles {
+        for particle in self.grid.iter().flat_map(|grid_box| &grid_box.particles) {
             particle.draw();
         }
+
+        for grid_box in &self.grid {
+            grid_box.draw();
+        }
+    }
+
+    fn get_grid_dimensions(&self, grid_size: f32) -> (usize, usize) {
+        let grid_cols = (screen_width() / grid_size).ceil() as usize;
+        let grid_rows = (screen_height() / grid_size).ceil() as usize;
+        (grid_cols, grid_rows)
+    }
+
+    fn get_grid_coords(&self, position: Vec2, grid_size: f32) -> (usize, usize) {
+        let mut grid_x = (position.x / grid_size).floor() as usize;
+        let mut grid_y = (position.y / grid_size).floor() as usize;
+
+        grid_x = grid_x.min(self.grid_cols.saturating_sub(1));
+        grid_y = grid_y.min(self.grid_rows.saturating_sub(1));
+
+        (grid_x, grid_y)
+    }
+
+    fn get_grid_index(&self, grid_x: usize, grid_y: usize) -> usize {
+        grid_y * self.grid_cols + grid_x
+    }
+
+    fn get_neighbor_particles(&self, grid_x: usize, grid_y: usize) -> Vec<Particle> {
+        let mut neighbors = Vec::new();
+        for ny_offset in -1..=1 {
+            for nx_offset in -1..=1 {
+                let ngx = grid_x as i32 + nx_offset;
+                let ngy = grid_y as i32 + ny_offset;
+
+                if ngx >= 0
+                    && ngx < self.grid_cols as i32
+                    && ngy >= 0
+                    && ngy < self.grid_rows as i32
+                {
+                    let neighbor_grid_index = (ngy as usize) * self.grid_cols + (ngx as usize);
+                    if neighbor_grid_index < self.grid.len() {
+                        for p_neighbor in &self.grid[neighbor_grid_index].particles {
+                            neighbors.push(p_neighbor.clone());
+                        }
+                    }
+                }
+            }
+        }
+        neighbors
     }
 
     pub fn update(&mut self, delta_time: f32, gravity: Vec2, config: &Config) {
+        self.update_spatial_grid(config);
         self.update_density(config);
 
-        for particle in &mut self.particles {
-            particle.update(delta_time, gravity);
-        }
+        (self.grid_cols, self.grid_rows) = self.get_grid_dimensions(config.smoothing_radius);
 
-        let forces: Vec<Vec2> = (0..self.particles.len())
-            .into_par_iter()
-            .map(|i| self.calculate_pressure_force(i, config.mass, config.smoothing_radius, config))
-            .collect();
-
-        self.particles
-            .par_iter_mut()
+        // Storing particle state and grid location for force calculation
+        let particle_info_for_force_calc: Vec<_> = self
+            .grid
+            .iter()
             .enumerate()
-            .for_each(|(i, particle)| {
-                if particle.density != 0.0 {
-                    particle.acceleration += forces[i] / particle.density; // Changed from = to += to accumulate gravity
-                } else {
-                    // Avoid division by zero, particle might be isolated or an error occurred
-                    // particle.acceleration is already set by particle.update (gravity)
-                    // Or, if pressure force should dominate, set to Vec2::ZERO
-                    // For now, let's assume gravity is already applied and we don't overwrite if density is zero.
-                }
-            });
-    }
-
-    pub fn update_density(&mut self, config: &Config) {
-        let densities: Vec<f32> = self
-            .particles
-            .par_iter()
-            .map(|particle| {
-                self.calculate_density(particle.position, config.mass, config.smoothing_radius)
+            .flat_map(|(grid_idx, grid_box)| {
+                let gx = grid_idx % self.grid_cols;
+                let gy = grid_idx / self.grid_cols;
+                grid_box
+                    .particles
+                    .iter()
+                    .map(move |p| (p.position, p.density, p.id, gx, gy, p.radius))
             })
             .collect();
 
-        self.particles
+        let forces: Vec<Vec2> = particle_info_for_force_calc
+            .par_iter()
+            .map(
+                |(current_pos, current_density, current_id, gx, gy, p_radius)| {
+                    let neighbor_particles = self.get_neighbor_particles(*gx, *gy);
+
+                    let temp_current_particle = Particle {
+                        position: *current_pos,
+                        density: *current_density,
+                        id: *current_id,
+                        radius: *p_radius,
+                        velocity: Vec2::ZERO,
+                        acceleration: Vec2::ZERO,
+                    };
+
+                    self.calculate_pressure_force_on_particle(
+                        &temp_current_particle,
+                        &neighbor_particles,
+                        config.mass,
+                        config.smoothing_radius,
+                        config,
+                    )
+                },
+            )
+            .collect();
+
+        // Apply forces in parallel
+        let mut flat_mut_particles: Vec<&mut Particle> = self
+            .grid
             .iter_mut()
-            .zip(densities)
-            .for_each(|(particle, density)| {
-                particle.density = density;
+            .flat_map(|gb| gb.particles.iter_mut())
+            .collect();
+
+        flat_mut_particles
+            .par_iter_mut()
+            .zip(forces.par_iter())
+            .for_each(|(particle, force)| {
+                if particle.density > 0.0 {
+                    particle.acceleration += *force / particle.density;
+                }
             });
+
+        // Update particle positions
+        for particle in &mut self
+            .grid
+            .iter_mut()
+            .flat_map(|grid_box| &mut grid_box.particles)
+        {
+            particle.update(delta_time, gravity);
+        }
     }
 
-    pub fn calculate_density(&self, point: Vec2, mass: f32, smoothing_radius: f32) -> f32 {
-        let mut density = 0.0;
+    pub fn update_spatial_grid(&mut self, config: &Config) {
+        let all_particles: Vec<Particle> = self
+            .grid
+            .iter()
+            .flat_map(|grid_box| grid_box.particles.clone())
+            .collect();
 
-        for particle in &self.particles {
-            let distance = point.distance(particle.position);
-            density += mass * self.smoothing_kernel(smoothing_radius, distance);
+        for grid_box in &mut self.grid {
+            grid_box.clear();
         }
-        density
+
+        let grid_size = config.smoothing_radius;
+        (self.grid_cols, self.grid_rows) = self.get_grid_dimensions(grid_size);
+
+        for particle in all_particles {
+            let (grid_x, grid_y) = self.get_grid_coords(particle.position, grid_size);
+            let index = self.get_grid_index(grid_x, grid_y);
+
+            if index < self.grid.len() {
+                self.grid[index].add_particle(particle);
+            } else if !self.grid.is_empty() {
+                let fallback_idx = self
+                    .get_grid_index(
+                        grid_x.min(self.grid_cols.saturating_sub(1)),
+                        grid_y.min(self.grid_rows.saturating_sub(1)),
+                    )
+                    .min(self.grid.len() - 1);
+
+                self.grid[fallback_idx].add_particle(particle);
+            }
+        }
+    }
+
+    pub fn update_density(&mut self, config: &Config) {
+        // Update grid dimensions
+        (self.grid_cols, self.grid_rows) = self.get_grid_dimensions(config.smoothing_radius);
+
+        // Storing particle positions and grid coordinates for density calculation
+        let particle_infos: Vec<(Vec2, usize, usize)> = self
+            .grid
+            .iter()
+            .enumerate()
+            .flat_map(|(grid_idx, grid_box)| {
+                let gx = grid_idx % self.grid_cols;
+                let gy = grid_idx / self.grid_cols;
+                grid_box.particles.iter().map(move |p| (p.position, gx, gy))
+            })
+            .collect();
+
+        let densities: Vec<f32> = particle_infos
+            .par_iter()
+            .map(|(position, gx, gy)| {
+                let neighbor_particles = self.get_neighbor_particles(*gx, *gy);
+                self.calculate_density_from_neighbors(
+                    *position,
+                    &neighbor_particles,
+                    config.mass,
+                    config.smoothing_radius,
+                )
+            })
+            .collect();
+
+        let mut density_iter = densities.iter();
+        for grid_box in &mut self.grid {
+            for particle in &mut grid_box.particles {
+                if let Some(&density) = density_iter.next() {
+                    particle.density = density;
+                } else {
+                    eprintln!("Error: Mismatch during density assignment.");
+                }
+            }
+        }
+    }
+
+    pub fn calculate_density_from_neighbors(
+        &self,
+        point: Vec2,
+        neighbor_particles: &[Particle],
+        mass: f32,
+        smoothing_radius: f32,
+    ) -> f32 {
+        neighbor_particles.iter().fold(0.0, |density, particle| {
+            let distance = point.distance(particle.position);
+            density + mass * self.smoothing_kernel(smoothing_radius, distance)
+        })
     }
 
     fn smoothing_kernel(&self, radius: f32, distance: f32) -> f32 {
@@ -132,13 +314,11 @@ impl Fluid {
         }
 
         let r_scaled = radius / DISTANCE_ZOOM;
-        // let d_scaled = distance / DISTANCE_ZOOM; // d_scaled is not used with current formula, but good to keep if formula changes
-
         let denominator = PI * r_scaled.powi(4);
 
         let scale = 12.0 / denominator;
 
-        (distance / DISTANCE_ZOOM - r_scaled) * scale // Ensure distance is also scaled consistently
+        (distance / DISTANCE_ZOOM - r_scaled) * scale
     }
 
     pub fn density_to_pressure(
@@ -151,25 +331,25 @@ impl Fluid {
         pressure_multiplier * density_diff
     }
 
-    pub fn calculate_pressure_force(
+    pub fn calculate_pressure_force_on_particle(
         &self,
-        index: usize,
+        current_particle: &Particle,
+        neighbor_particles: &[Particle],
         mass: f32,
         radius: f32,
         config: &Config,
     ) -> Vec2 {
         let mut pressure_force = Vec2::ZERO;
-        let current_particle_pos = self.particles[index].position;
-        let current_particle_density = self.particles[index].density;
+        let current_particle_pos = current_particle.position;
+        let current_particle_density = current_particle.density;
 
-        for (i, other_particle) in self.particles.iter().enumerate() {
-            if i == index {
+        for other_particle in neighbor_particles {
+            if other_particle.id == current_particle.id {
                 continue;
             }
 
             let distance = current_particle_pos.distance(other_particle.position);
             if distance == 0.0 || distance > radius {
-                // also check distance > radius here
                 continue;
             }
 
@@ -177,8 +357,6 @@ impl Fluid {
                 (other_particle.position - current_particle_pos).normalize_or_zero();
 
             if direction == Vec2::ZERO {
-                // This case (distance != 0 but normalize_or_zero gives ZERO) should not happen with standard Vec2.
-                // If it could, or if distance was zero and we didn't continue, then assign random.
                 let angle = rand::gen_range(0.0, 2.0 * PI);
                 direction = Vec2::new(angle.cos(), angle.sin());
             }
@@ -190,10 +368,10 @@ impl Fluid {
                 config,
             );
 
-            if other_particle.density == 0.0 {
-                continue; // Avoid division by zero
+            if other_particle.density > 0.0 {
+                pressure_force +=
+                    shared_pressure * direction * slope * mass / other_particle.density;
             }
-            pressure_force += shared_pressure * direction * slope * mass / other_particle.density;
         }
 
         pressure_force
@@ -209,73 +387,6 @@ impl Fluid {
             self.density_to_pressure(density_a, config.target_density, config.pressure_multiplier);
         let pressure_b =
             self.density_to_pressure(density_b, config.target_density, config.pressure_multiplier);
-        let shared_pressure = (pressure_a + pressure_b) / 2.0;
-        shared_pressure
+        (pressure_a + pressure_b) / 2.0
     }
-
-    #[allow(dead_code)]
-    pub fn calculate_property(&self, point: Vec2, mass: f32, radius: f32) -> f32 {
-        let mut property = 0.0;
-
-        for particle in &self.particles {
-            let distance = point.distance(particle.position);
-            if distance > radius {
-                // Optimization: skip particles outside radius
-                continue;
-            }
-            let influcence = self.smoothing_kernel(radius, distance);
-            property += influcence * mass / particle.density // * property to calculate
-        }
-
-        property
-    }
-
-    // #[allow(dead_code)]
-    // pub fn calculate_property_gradient(&self, point: Vec2, mass: f32, radius: f32) -> Vec2 {
-    //     // let mut gradient = Vec2::ZERO;
-
-    //     // for particle in &self.particles {
-    //     //     let distance = point.distance(particle.position);
-    //     //     let direction = (particle.position - point).normalize();
-    //     //     let slope = self.smoothing_kernel_derivative(radius, distance);
-    //     //     let density = self.calculate_density(particle.position, mass, radius);
-    //     //     gradient += direction * slope * mass / density; // * property to calculate
-    //     // }
-
-    //     // gradient
-
-    //     self.particles
-    //         .par_iter()
-    //         .map(|particle| {
-    //             let distance = point.distance(particle.position);
-    //             if distance == 0.0 || distance > radius {
-    //                 // Avoid division by zero if point is particle.position, and skip if too far
-    //                 return Vec2::ZERO;
-    //             }
-    //             let mut direction = (particle.position - point).normalize_or_zero(); // normalize_or_zero handles zero vector case
-
-    //             // If direction is still zero (e.g. point == particle.position after all checks, though distance check should prevent)
-    //             // a random direction might be needed, or skip. For now, normalize_or_zero handles it.
-    //             if direction == Vec2::ZERO {
-    //                 // This case should ideally be handled by the distance check or specific logic
-    //                 // For SPH, a particle doesn't exert force/gradient on itself in this manner.
-    //                 // If point can be exactly a particle's position, this needs careful thought.
-    //                 // Assuming distance > 0 from the check above.
-    //             }
-
-    //             let slope = self.smoothing_kernel_derivative(radius, distance);
-
-    //             // PERFORMANCE NOTE: This calculate_density call is inside a loop.
-    //             // If particle.density (the stored density) is appropriate for this property calculation,
-    //             // using it directly would be a significant optimization, changing this part from O(N) to O(1).
-    //             // The current implementation makes calculate_property_gradient O(N^2) per call.
-    //             let density = self.calculate_density(particle.position, mass, radius);
-
-    //             if density == 0.0 {
-    //                 return Vec2::ZERO; // Avoid division by zero
-    //             }
-    //             direction * slope * mass / density // * property value of the particle (if property varies per particle)
-    //         })
-    //         .reduce(|| Vec2::ZERO, |a, b| a + b)
-    // }
 }

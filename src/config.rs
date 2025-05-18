@@ -1,6 +1,10 @@
 use macroquad::prelude::*;
 
-use crate::fluid::FluidSpawnMode;
+#[allow(dead_code)]
+pub enum FluidSpawnMode {
+    Random,
+    Grid,
+}
 
 pub struct Config {
     pub particle_radius: f32,
@@ -19,14 +23,14 @@ pub struct Config {
 
 impl Config {
     pub fn new() -> Self {
-        let fluid_spawn_mode = FluidSpawnMode::Grid;
+        let fluid_spawn_mode = FluidSpawnMode::Random;
         let gravity = match fluid_spawn_mode {
             FluidSpawnMode::Random => Vec2::new(0.0, 0.0),
             FluidSpawnMode::Grid => Vec2::new(0.0, 1.),
         };
 
         let particle_count = match fluid_spawn_mode {
-            FluidSpawnMode::Random => 500,
+            FluidSpawnMode::Random => 2000,
             FluidSpawnMode::Grid => 100,
         };
 

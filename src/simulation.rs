@@ -58,21 +58,27 @@ impl Simulation {
 
         self.fluid
             .update(delta_time, self.config.gravity, &self.config);
-        self.boundary.check_collision(&mut self.fluid.particles);
-
-        if let Some(point) = self.sample_point {
-            self.density_at_sample_point = Some(self.fluid.calculate_density(
-                point,
-                self.config.mass,
-                self.config.smoothing_radius,
-            ));
-
-            // self.gradient_at_sample_point = Some(self.fluid.calculate_density_gradient(
-            //     point,
-            //     self.config.mass,
-            //     self.config.smoothing_radius,
-            // ));
+        let mut particles = Vec::new();
+        for grid in &mut self.fluid.grid {
+            for particle in &mut grid.particles {
+                particles.push(particle);
+            }
         }
+        self.boundary.check_collision(&mut particles);
+
+        // if let Some(point) = self.sample_point {
+        // self.density_at_sample_point = Some(self.fluid.calculate_density(
+        //     point,
+        //     self.config.mass,
+        //     self.config.smoothing_radius,
+        // ));
+
+        // self.gradient_at_sample_point = Some(self.fluid.calculate_density_gradient(
+        //     point,
+        //     self.config.mass,
+        //     self.config.smoothing_radius,
+        // ));
+        // }
     }
 
     pub fn render(&self) {
