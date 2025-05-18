@@ -53,4 +53,10 @@ impl Fluid {
             particle.draw();
         }
     }
+
+    pub fn update(&mut self, delta_time: f32, gravity: Vec2) {
+        for particle in &mut self.particles {
+            particle.update(delta_time, gravity);
+        }
+    }
 }

@@ -5,7 +5,7 @@ use crate::{boundary::Boundary, config::Config, fluid::Fluid};
 pub struct Simulation {
     is_running: bool,
     is_paused: bool,
-    // config: Config,
+    config: Config,
     fluid: Fluid,
     boundary: Boundary,
 }
@@ -15,12 +15,12 @@ impl Simulation {
         let config = Config::new();
 
         let fluid = Fluid::from_config(&config);
-        let boundary = Boundary::new(config.boundary_padding);
+        let boundary = Boundary::new(config.boundary_padding, config.boundary_damping);
 
         Self {
             is_running: true,
-            is_paused: true,
-            // config,
+            is_paused: false,
+            config,
             fluid,
             boundary,
         }
@@ -35,7 +35,7 @@ impl Simulation {
         }
     }
 
-    pub fn update(&mut self, _delta_time: f32) {
+    pub fn update(&mut self, delta_time: f32) {
         if !self.is_running {
             std::process::exit(0);
         }
@@ -43,7 +43,8 @@ impl Simulation {
             return;
         }
 
-        self.boundary.check_collision();
+        self.fluid.update(delta_time, self.config.gravity);
+        self.boundary.check_collision(&mut self.fluid.particles);
     }
 
     pub fn render(&self) {
