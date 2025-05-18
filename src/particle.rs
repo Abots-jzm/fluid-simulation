@@ -1,5 +1,7 @@
 use macroquad::prelude::*;
 
+use crate::simulation::DISTANCE_ZOOM;
+
 pub struct Particle {
     pub position: Vec2,
     pub velocity: Vec2,
@@ -22,10 +24,19 @@ impl Particle {
     }
 
     pub fn update(&mut self, delta_time: f32, gravity: Vec2) {
-        self.acceleration += gravity;
+        self.acceleration += gravity * DISTANCE_ZOOM;
         self.velocity += self.acceleration * delta_time;
         self.position += self.velocity * delta_time;
-        // Reset acceleration after applying it
+
         self.acceleration = Vec2::ZERO;
     }
+
+    // pub fn smoothing_kernel(&self, other: &Particle, radius: f32) -> f32 {
+    //     let distance = self.position.distance(other.position);
+    //     println!("Distance: {}", distance);
+
+    //     let result = (radius * radius - distance * distance).max(0.0);
+
+    //     result * result * result
+    // }
 }

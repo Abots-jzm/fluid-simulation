@@ -1,7 +1,10 @@
+use std::f32::consts::PI;
+
 use macroquad::prelude::*;
 
-use crate::{config::Config, particle::Particle};
+use crate::{config::Config, particle::Particle, simulation::DISTANCE_ZOOM};
 
+#[allow(dead_code)]
 pub enum FluidSpawnMode {
     Random,
     Grid,
@@ -58,5 +61,28 @@ impl Fluid {
         for particle in &mut self.particles {
             particle.update(delta_time, gravity);
         }
+    }
+
+    pub fn calculate_density(&self, point: Vec2, mass: f32, smoothing_radius: f32) -> f32 {
+        let mut density = 0.0;
+
+        for particle in &self.particles {
+            // Calculate the distance between the point and the particle
+            let distance = point.distance(particle.position);
+            if distance < smoothing_radius {
+                density += mass * self.smoothing_kernel(smoothing_radius, distance);
+            }
+        }
+        density
+    }
+
+    fn smoothing_kernel(&self, radius: f32, distance: f32) -> f32 {
+        let distance = distance / DISTANCE_ZOOM;
+        let radius = radius / DISTANCE_ZOOM;
+
+        let volume = PI * radius.powi(8) / 4.0;
+        let result = radius * radius - distance * distance;
+
+        result * result * result / volume
     }
 }
