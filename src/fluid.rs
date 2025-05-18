@@ -4,7 +4,7 @@ use macroquad::prelude::*;
 use rayon::prelude::*;
 
 use crate::{
-    config::{Config, FluidSpawnMode},
+    config::{Config, FluidSpawnMode, InteractionType},
     grid::GridBox,
     particle::Particle,
     simulation::DISTANCE_ZOOM,
@@ -83,7 +83,7 @@ impl Fluid {
 
     pub fn draw(&self) {
         for particle in self.grid.iter().flat_map(|grid_box| &grid_box.particles) {
-            particle.draw();
+            particle.draw(500.);
         }
 
         for grid_box in &self.grid {
@@ -136,7 +136,14 @@ impl Fluid {
     }
 
     pub fn update(&mut self, delta_time: f32, gravity: Vec2, config: &Config) {
-        self.update_spatial_grid(config);
+        // predict particle positions
+        for grid_box in &mut self.grid {
+            for particle in &mut grid_box.particles {
+                particle.predict_position();
+            }
+        }
+
+        self.update_spatial_grid(config); // Grid now updated based on predicted_position
         self.update_density(config);
 
         (self.grid_cols, self.grid_rows) = self.get_grid_dimensions(config.smoothing_radius);
@@ -149,21 +156,37 @@ impl Fluid {
             .flat_map(|(grid_idx, grid_box)| {
                 let gx = grid_idx % self.grid_cols;
                 let gy = grid_idx / self.grid_cols;
-                grid_box
-                    .particles
-                    .iter()
-                    .map(move |p| (p.position, p.density, p.id, gx, gy, p.radius))
+                grid_box.particles.iter().map(move |p| {
+                    (
+                        p.position,
+                        p.predicted_position,
+                        p.density,
+                        p.id,
+                        gx,
+                        gy,
+                        p.radius,
+                    )
+                })
             })
             .collect();
 
         let forces: Vec<Vec2> = particle_info_for_force_calc
             .par_iter()
             .map(
-                |(current_pos, current_density, current_id, gx, gy, p_radius)| {
+                |(
+                    current_pos,
+                    predicted_position,
+                    current_density,
+                    current_id,
+                    gx,
+                    gy,
+                    p_radius,
+                )| {
                     let neighbor_particles = self.get_neighbor_particles(*gx, *gy);
 
                     let temp_current_particle = Particle {
                         position: *current_pos,
+                        predicted_position: *predicted_position,
                         density: *current_density,
                         id: *current_id,
                         radius: *p_radius,
@@ -222,8 +245,20 @@ impl Fluid {
         let grid_size = config.smoothing_radius;
         (self.grid_cols, self.grid_rows) = self.get_grid_dimensions(grid_size);
 
+        let expected_grid_len = self.grid_cols * self.grid_rows;
+        if self.grid.len() != expected_grid_len {
+            self.grid.clear();
+            for i in 0..self.grid_rows {
+                for j in 0..self.grid_cols {
+                    let x = j as f32 * grid_size;
+                    let y = i as f32 * grid_size;
+                    self.grid.push(GridBox::new(grid_size, Vec2::new(x, y)));
+                }
+            }
+        }
+
         for particle in all_particles {
-            let (grid_x, grid_y) = self.get_grid_coords(particle.position, grid_size);
+            let (grid_x, grid_y) = self.get_grid_coords(particle.predicted_position, grid_size);
             let index = self.get_grid_index(grid_x, grid_y);
 
             if index < self.grid.len() {
@@ -234,9 +269,11 @@ impl Fluid {
                         grid_x.min(self.grid_cols.saturating_sub(1)),
                         grid_y.min(self.grid_rows.saturating_sub(1)),
                     )
-                    .min(self.grid.len() - 1);
+                    .min(self.grid.len().saturating_sub(1)); // Ensure fallback_idx is valid
 
-                self.grid[fallback_idx].add_particle(particle);
+                if fallback_idx < self.grid.len() {
+                    self.grid[fallback_idx].add_particle(particle);
+                }
             }
         }
     }
@@ -253,16 +290,19 @@ impl Fluid {
             .flat_map(|(grid_idx, grid_box)| {
                 let gx = grid_idx % self.grid_cols;
                 let gy = grid_idx / self.grid_cols;
-                grid_box.particles.iter().map(move |p| (p.position, gx, gy))
+                grid_box
+                    .particles
+                    .iter()
+                    .map(move |p| (p.predicted_position, gx, gy))
             })
             .collect();
 
         let densities: Vec<f32> = particle_infos
             .par_iter()
-            .map(|(position, gx, gy)| {
+            .map(|(predicted_position, gx, gy)| {
                 let neighbor_particles = self.get_neighbor_particles(*gx, *gy);
                 self.calculate_density_from_neighbors(
-                    *position,
+                    *predicted_position,
                     &neighbor_particles,
                     config.mass,
                     config.smoothing_radius,
@@ -290,7 +330,7 @@ impl Fluid {
         smoothing_radius: f32,
     ) -> f32 {
         neighbor_particles.iter().fold(0.0, |density, particle| {
-            let distance = point.distance(particle.position);
+            let distance = point.distance(particle.predicted_position);
             density + mass * self.smoothing_kernel(smoothing_radius, distance)
         })
     }
@@ -340,7 +380,7 @@ impl Fluid {
         config: &Config,
     ) -> Vec2 {
         let mut pressure_force = Vec2::ZERO;
-        let current_particle_pos = current_particle.position;
+        let current_particle_pos = current_particle.predicted_position;
         let current_particle_density = current_particle.density;
 
         for other_particle in neighbor_particles {
@@ -348,13 +388,13 @@ impl Fluid {
                 continue;
             }
 
-            let distance = current_particle_pos.distance(other_particle.position);
+            let distance = current_particle_pos.distance(other_particle.predicted_position);
             if distance == 0.0 || distance > radius {
                 continue;
             }
 
             let mut direction =
-                (other_particle.position - current_particle_pos).normalize_or_zero();
+                (other_particle.predicted_position - current_particle_pos).normalize_or_zero();
 
             if direction == Vec2::ZERO {
                 let angle = rand::gen_range(0.0, 2.0 * PI);
@@ -388,5 +428,38 @@ impl Fluid {
         let pressure_b =
             self.density_to_pressure(density_b, config.target_density, config.pressure_multiplier);
         (pressure_a + pressure_b) / 2.0
+    }
+
+    pub fn handle_interaction(
+        &mut self,
+        click_point: Vec2,
+        interaction_type: InteractionType,
+        config: &Config,
+    ) {
+        let radius = config.interaction_radius;
+        let strength = config.interaction_strength;
+
+        for grid_box in &mut self.grid {
+            for particle in &mut grid_box.particles {
+                let offset = click_point - particle.position;
+                let sqr_dist = offset.length_squared();
+
+                if sqr_dist < radius * radius && sqr_dist > 1e-6 {
+                    let dist = sqr_dist.sqrt();
+
+                    let dir_to_input_point = offset / dist;
+
+                    let centre_t = 1.0 - dist / radius;
+
+                    let base_force_dir = match interaction_type {
+                        InteractionType::Pull => dir_to_input_point,
+                        InteractionType::Push => -dir_to_input_point,
+                    };
+
+                    let acc_change = (base_force_dir * strength - particle.velocity) * centre_t;
+                    particle.acceleration += acc_change;
+                }
+            }
+        }
     }
 }

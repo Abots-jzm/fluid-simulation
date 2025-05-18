@@ -1,6 +1,10 @@
 use macroquad::prelude::*;
 
-use crate::{boundary::Boundary, config::Config, fluid::Fluid};
+use crate::{
+    boundary::Boundary,
+    config::{Config, InteractionType},
+    fluid::Fluid,
+};
 
 pub const DISTANCE_ZOOM: f32 = 1000.0;
 
@@ -10,9 +14,8 @@ pub struct Simulation {
     config: Config,
     fluid: Fluid,
     boundary: Boundary,
-    sample_point: Option<Vec2>,
-    density_at_sample_point: Option<f32>,
-    gradient_at_sample_point: Option<Vec2>,
+    click_point: Option<Vec2>,
+    interaction_type: Option<InteractionType>,
 }
 
 impl Simulation {
@@ -28,9 +31,8 @@ impl Simulation {
             config,
             fluid,
             boundary,
-            sample_point: None,
-            density_at_sample_point: None,
-            gradient_at_sample_point: None,
+            click_point: None,
+            interaction_type: None,
         }
     }
 
@@ -42,9 +44,26 @@ impl Simulation {
             self.is_paused = !self.is_paused;
         }
 
-        if is_mouse_button_pressed(MouseButton::Left) {
+        if is_mouse_button_down(MouseButton::Left) {
             let mouse_pos = mouse_position();
-            self.sample_point = Some(Vec2::new(mouse_pos.0, mouse_pos.1));
+            self.click_point = Some(Vec2::new(mouse_pos.0, mouse_pos.1));
+            self.interaction_type = Some(InteractionType::Pull);
+        }
+
+        if is_mouse_button_down(MouseButton::Right) {
+            let mouse_pos = mouse_position();
+            self.click_point = Some(Vec2::new(mouse_pos.0, mouse_pos.1));
+            self.interaction_type = Some(InteractionType::Push);
+        }
+
+        if is_mouse_button_released(MouseButton::Left) {
+            self.click_point = None;
+            self.interaction_type = None;
+        }
+
+        if is_mouse_button_released(MouseButton::Right) {
+            self.click_point = None;
+            self.interaction_type = None;
         }
     }
 
@@ -58,73 +77,34 @@ impl Simulation {
 
         self.fluid
             .update(delta_time, self.config.gravity, &self.config);
+
+        // Handle interaction before collecting particles
+        if let Some(click_point) = self.click_point {
+            if let Some(interaction_type) = &self.interaction_type {
+                self.fluid
+                    .handle_interaction(click_point, *interaction_type, &self.config);
+            }
+        }
+
         let mut particles = Vec::new();
         for grid in &mut self.fluid.grid {
             for particle in &mut grid.particles {
                 particles.push(particle);
             }
         }
+
         self.boundary.check_collision(&mut particles);
-
-        // if let Some(point) = self.sample_point {
-        // self.density_at_sample_point = Some(self.fluid.calculate_density(
-        //     point,
-        //     self.config.mass,
-        //     self.config.smoothing_radius,
-        // ));
-
-        // self.gradient_at_sample_point = Some(self.fluid.calculate_density_gradient(
-        //     point,
-        //     self.config.mass,
-        //     self.config.smoothing_radius,
-        // ));
-        // }
     }
 
     pub fn render(&self) {
         self.boundary.draw();
         self.fluid.draw();
-        self.draw_sample_point();
-        self.draw_smoothing_kernel();
+        self.draw_interaction_radius();
     }
 
-    pub fn draw_sample_point(&self) {
-        if let Some(point) = self.sample_point {
-            draw_circle(point.x, point.y, 5.0, RED);
-        }
-        if let Some(density) = self.density_at_sample_point {
-            let text = format!("Density: {:.2}", density);
-            draw_text(&text, 10.0, 20.0, 20.0, WHITE);
-        }
-
-        if let Some(gradient) = self.gradient_at_sample_point {
-            let text = format!("Gradient: ({:.2}, {:.2})", gradient.x, gradient.y);
-            draw_text(&text, 10.0, 40.0, 20.0, WHITE);
-        }
-
-        //draw graident as an arrow where length of arrow is magnitude of gradient
-        // and direction is the direction of the gradient
-        if let Some(gradient) = self.gradient_at_sample_point {
-            let length = gradient.length() / 100.;
-            let direction = gradient.normalize();
-            let arrow_end = Vec2::new(
-                self.sample_point.unwrap().x + direction.x * length,
-                self.sample_point.unwrap().y + direction.y * length,
-            );
-            draw_line(
-                self.sample_point.unwrap().x,
-                self.sample_point.unwrap().y,
-                arrow_end.x,
-                arrow_end.y,
-                2.0,
-                YELLOW,
-            );
-        }
-    }
-
-    pub fn draw_smoothing_kernel(&self) {
-        if let Some(point) = self.sample_point {
-            let radius = self.config.smoothing_radius;
+    pub fn draw_interaction_radius(&self) {
+        if let Some(point) = self.click_point {
+            let radius = self.config.interaction_radius;
             draw_circle_lines(point.x, point.y, radius, 1., GREEN);
         }
     }
