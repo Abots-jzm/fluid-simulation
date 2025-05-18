@@ -1,20 +1,23 @@
-pub enum Mode {
-    Default,
-}
+use macroquad::prelude::*;
+
+use crate::fluid::FluidSpawnMode;
 
 pub struct Config {
-    mode: Mode,
+    pub top_padding: f32,
+    pub particle_radius: f32,
+    pub particle_count: u32,
+    pub particle_spacing: f32,
+    pub fluid_spawn_mode: FluidSpawnMode,
 }
 
 impl Config {
-    pub fn new(mode: Mode) -> Self {
-        Self { mode }
-    }
-
-    pub fn get_display_items(&self) -> Vec<(&'static str, String)> {
-        let mode_display = match self.mode {
-            Mode::Default => "Default",
-        };
-        vec![("Mode", mode_display.to_string())]
+    pub fn new() -> Self {
+        Self {
+            top_padding: 50.0,
+            particle_radius: 5.0,
+            particle_count: 100,
+            particle_spacing: 50.0,
+            fluid_spawn_mode: FluidSpawnMode::Grid,
+        }
     }
 }

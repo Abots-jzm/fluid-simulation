@@ -1,9 +1,12 @@
 use macroquad::prelude::*;
 
+mod boundary;
 mod config;
-mod game;
+mod fluid;
+mod particle;
+mod simulation;
 
-use crate::game::Game;
+use crate::simulation::Simulation;
 fn window_conf() -> Conf {
     Conf {
         window_title: "Fluid Simulation".to_owned(),
@@ -15,14 +18,13 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut game = Game::new();
+    let mut simulation = Simulation::new();
 
     loop {
         clear_background(BLACK);
-        game.handle_input();
-        game.update(get_frame_time());
-        println!("FPS: {}", get_fps());
-        game.render();
+        simulation.handle_input();
+        simulation.update(get_frame_time());
+        simulation.render();
         next_frame().await
     }
 }
