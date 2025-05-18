@@ -1,14 +1,14 @@
 use macroquad::prelude::*;
 
+mod config;
 mod game;
 
 use crate::game::Game;
 fn window_conf() -> Conf {
     Conf {
         window_title: "Fluid Simulation".to_owned(),
-        window_height: 500,
-        window_width: 500,
-        window_resizable: false,
+        fullscreen: true,
+        window_resizable: true,
         ..Default::default()
     }
 }
@@ -21,6 +21,7 @@ async fn main() {
         clear_background(BLACK);
         game.handle_input();
         game.update(get_frame_time());
+        println!("FPS: {}", get_fps());
         game.render();
         next_frame().await
     }
