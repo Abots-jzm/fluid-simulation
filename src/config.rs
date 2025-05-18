@@ -19,14 +19,14 @@ pub struct Config {
 
 impl Config {
     pub fn new() -> Self {
-        let fluid_spawn_mode = FluidSpawnMode::Random;
+        let fluid_spawn_mode = FluidSpawnMode::Grid;
         let gravity = match fluid_spawn_mode {
             FluidSpawnMode::Random => Vec2::new(0.0, 0.0),
             FluidSpawnMode::Grid => Vec2::new(0.0, 1.),
         };
 
         let particle_count = match fluid_spawn_mode {
-            FluidSpawnMode::Random => 1000,
+            FluidSpawnMode::Random => 500,
             FluidSpawnMode::Grid => 100,
         };
 

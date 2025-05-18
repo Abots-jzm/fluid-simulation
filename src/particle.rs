@@ -28,18 +28,8 @@ impl Particle {
     pub fn update(&mut self, delta_time: f32, gravity: Vec2) {
         self.acceleration += gravity * DISTANCE_ZOOM;
         self.velocity += self.acceleration * delta_time;
-        // self.velocity = self.acceleration * delta_time;
         self.position += self.velocity * delta_time;
 
         self.acceleration = Vec2::ZERO;
     }
-
-    // pub fn smoothing_kernel(&self, other: &Particle, radius: f32) -> f32 {
-    //     let distance = self.position.distance(other.position);
-    //     println!("Distance: {}", distance);
-
-    //     let result = (radius * radius - distance * distance).max(0.0);
-
-    //     result * result * result
-    // }
 }
