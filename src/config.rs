@@ -13,6 +13,8 @@ pub struct Config {
     pub gravity: Vec2,
     pub mass: f32,
     pub smoothing_radius: f32,
+    pub target_density: f32,
+    pub pressure_multiplier: f32,
 }
 
 impl Config {
@@ -23,9 +25,14 @@ impl Config {
             FluidSpawnMode::Grid => Vec2::new(0.0, 1.),
         };
 
+        let particle_count = match fluid_spawn_mode {
+            FluidSpawnMode::Random => 1000,
+            FluidSpawnMode::Grid => 100,
+        };
+
         Self {
-            particle_radius: 10.0,
-            particle_count: 400,
+            particle_radius: 5.0,
+            particle_count,
             particle_spacing: 50.0,
             particle_columns: 10,
             boundary_padding: 25.0,
@@ -34,6 +41,8 @@ impl Config {
             mass: 1.0,
             smoothing_radius: 100.0,
             fluid_spawn_mode,
+            target_density: 350.0,
+            pressure_multiplier: 50.,
         }
     }
 }

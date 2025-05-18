@@ -12,6 +12,7 @@ pub struct Simulation {
     boundary: Boundary,
     sample_point: Option<Vec2>,
     density_at_sample_point: Option<f32>,
+    gradient_at_sample_point: Option<Vec2>,
 }
 
 impl Simulation {
@@ -29,6 +30,7 @@ impl Simulation {
             boundary,
             sample_point: None,
             density_at_sample_point: None,
+            gradient_at_sample_point: None,
         }
     }
 
@@ -54,7 +56,8 @@ impl Simulation {
             return;
         }
 
-        self.fluid.update(delta_time, self.config.gravity);
+        self.fluid
+            .update(delta_time, self.config.gravity, &self.config);
         self.boundary.check_collision(&mut self.fluid.particles);
 
         if let Some(point) = self.sample_point {
@@ -63,6 +66,12 @@ impl Simulation {
                 self.config.mass,
                 self.config.smoothing_radius,
             ));
+
+            // self.gradient_at_sample_point = Some(self.fluid.calculate_density_gradient(
+            //     point,
+            //     self.config.mass,
+            //     self.config.smoothing_radius,
+            // ));
         }
     }
 
@@ -80,6 +89,30 @@ impl Simulation {
         if let Some(density) = self.density_at_sample_point {
             let text = format!("Density: {:.2}", density);
             draw_text(&text, 10.0, 20.0, 20.0, WHITE);
+        }
+
+        if let Some(gradient) = self.gradient_at_sample_point {
+            let text = format!("Gradient: ({:.2}, {:.2})", gradient.x, gradient.y);
+            draw_text(&text, 10.0, 40.0, 20.0, WHITE);
+        }
+
+        //draw graident as an arrow where length of arrow is magnitude of gradient
+        // and direction is the direction of the gradient
+        if let Some(gradient) = self.gradient_at_sample_point {
+            let length = gradient.length() / 100.;
+            let direction = gradient.normalize();
+            let arrow_end = Vec2::new(
+                self.sample_point.unwrap().x + direction.x * length,
+                self.sample_point.unwrap().y + direction.y * length,
+            );
+            draw_line(
+                self.sample_point.unwrap().x,
+                self.sample_point.unwrap().y,
+                arrow_end.x,
+                arrow_end.y,
+                2.0,
+                YELLOW,
+            );
         }
     }
 
