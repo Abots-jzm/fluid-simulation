@@ -30,7 +30,7 @@ impl Boundary {
     pub fn check_collision(&self, particles: &mut Vec<&mut Particle>) {
         for particle in particles.iter_mut() {
             // Left boundary
-            if particle.position.x < self.pos.x + particle.radius {
+            if particle.position.x <= self.pos.x + particle.radius {
                 particle.position.x = self.pos.x + particle.radius;
                 // Only negate velocity if moving toward the boundary
                 if particle.velocity.x < 0.0 {
@@ -38,7 +38,7 @@ impl Boundary {
                 }
             }
             // Right boundary
-            else if particle.position.x > self.pos.x + self.width - particle.radius {
+            else if particle.position.x >= self.pos.x + self.width - particle.radius {
                 particle.position.x = self.pos.x + self.width - particle.radius;
                 // Only negate velocity if moving toward the boundary
                 if particle.velocity.x > 0.0 {
@@ -47,7 +47,7 @@ impl Boundary {
             }
 
             // Top boundary
-            if particle.position.y < self.pos.y + particle.radius {
+            if particle.position.y <= self.pos.y + particle.radius {
                 particle.position.y = self.pos.y + particle.radius;
                 // Only negate velocity if moving toward the boundary
                 if particle.velocity.y < 0.0 {
@@ -55,7 +55,7 @@ impl Boundary {
                 }
             }
             // Bottom boundary
-            else if particle.position.y > self.pos.y + self.height - particle.radius {
+            else if particle.position.y >= self.pos.y + self.height - particle.radius {
                 particle.position.y = self.pos.y + self.height - particle.radius;
                 // Only negate velocity if moving toward the boundary
                 if particle.velocity.y > 0.0 {

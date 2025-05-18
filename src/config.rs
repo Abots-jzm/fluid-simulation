@@ -4,6 +4,7 @@ use macroquad::prelude::*;
 pub enum FluidSpawnMode {
     Random,
     Grid,
+    Gravity,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -31,10 +32,20 @@ pub struct Config {
 
 impl Config {
     pub fn new() -> Self {
-        let fluid_spawn_mode = FluidSpawnMode::Grid;
+        let fluid_spawn_mode = FluidSpawnMode::Gravity;
         let gravity = match fluid_spawn_mode {
-            FluidSpawnMode::Random => Vec2::new(0.0, 0.0),
-            FluidSpawnMode::Grid => Vec2::new(0.0, 0.),
+            FluidSpawnMode::Gravity => Vec2::new(0.0, 0.75),
+            _ => Vec2::new(0.0, 0.0),
+        };
+
+        let target_density = match fluid_spawn_mode {
+            FluidSpawnMode::Gravity => 3000.0,
+            _ => 150.0,
+        };
+
+        let pressure_multiplier = match fluid_spawn_mode {
+            FluidSpawnMode::Gravity => 500.0,
+            _ => 150.0,
         };
 
         Self {
@@ -48,8 +59,8 @@ impl Config {
             mass: 1.0,
             smoothing_radius: 40.0,
             fluid_spawn_mode,
-            target_density: 150.0,
-            pressure_multiplier: 250.,
+            target_density,
+            pressure_multiplier,
             interaction_strength: 5000.,
             interaction_radius: 200.0,
         }

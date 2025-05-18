@@ -33,7 +33,7 @@ impl Fluid {
                     particles.push(Particle::new(Vec2::new(x, y), config.particle_radius));
                 }
             }
-            FluidSpawnMode::Grid => {
+            _ => {
                 let cols = config.particle_columns;
                 let rows = config.particle_count / cols;
 
@@ -83,7 +83,7 @@ impl Fluid {
 
     pub fn draw(&self) {
         for particle in self.grid.iter().flat_map(|grid_box| &grid_box.particles) {
-            particle.draw(500.);
+            particle.draw(1000.);
         }
 
         for grid_box in &self.grid {
