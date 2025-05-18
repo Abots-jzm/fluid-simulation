@@ -17,13 +17,19 @@ impl Fluid {
         match config.fluid_spawn_mode {
             FluidSpawnMode::Random => {
                 for _ in 0..config.particle_count {
-                    let x = rand::gen_range(0.0, screen_width());
-                    let y = rand::gen_range(0.0, screen_height());
+                    let x = rand::gen_range(
+                        config.boundary_padding + config.particle_radius,
+                        screen_width() - config.boundary_padding - config.particle_radius,
+                    );
+                    let y = rand::gen_range(
+                        config.boundary_padding + config.particle_radius,
+                        screen_height() - config.boundary_padding - config.particle_radius,
+                    );
                     particles.push(Particle::new(Vec2::new(x, y), config.particle_radius));
                 }
             }
             FluidSpawnMode::Grid => {
-                let cols = 10;
+                let cols = config.particle_columns;
                 let rows = config.particle_count / cols;
 
                 let total_width = cols as f32 * config.particle_spacing;
@@ -32,7 +38,8 @@ impl Fluid {
                 for i in 0..rows {
                     for j in 0..cols {
                         let x = left_offset + j as f32 * config.particle_spacing;
-                        let y = i as f32 * config.particle_spacing + config.top_padding;
+                        let y =
+                            i as f32 * config.particle_spacing + (config.boundary_padding * 2.0);
                         particles.push(Particle::new(Vec2::new(x, y), config.particle_radius));
                     }
                 }

@@ -1,12 +1,13 @@
 use macroquad::prelude::*;
 
-use crate::{config::Config, fluid::Fluid};
+use crate::{boundary::Boundary, config::Config, fluid::Fluid};
 
 pub struct Simulation {
     is_running: bool,
     is_paused: bool,
-    config: Config,
+    // config: Config,
     fluid: Fluid,
+    boundary: Boundary,
 }
 
 impl Simulation {
@@ -14,12 +15,14 @@ impl Simulation {
         let config = Config::new();
 
         let fluid = Fluid::from_config(&config);
+        let boundary = Boundary::new(config.boundary_padding);
 
         Self {
             is_running: true,
             is_paused: true,
-            config,
+            // config,
             fluid,
+            boundary,
         }
     }
 
@@ -39,9 +42,12 @@ impl Simulation {
         if self.is_paused {
             return;
         }
+
+        self.boundary.check_collision();
     }
 
     pub fn render(&self) {
+        self.boundary.draw();
         self.fluid.draw();
     }
 }
