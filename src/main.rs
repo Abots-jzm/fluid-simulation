@@ -5,6 +5,7 @@ mod config;
 mod fluid;
 mod grid;
 mod particle;
+mod physics;
 mod simulation;
 
 use crate::simulation::Simulation;

@@ -51,7 +51,7 @@ impl Config {
 
         let viscosity_strength = match fluid_spawn_mode {
             FluidSpawnMode::Gravity => 5.,
-            _ => 25.,
+            _ => 10.,
         };
 
         Self {
@@ -67,7 +67,7 @@ impl Config {
             fluid_spawn_mode,
             target_density,
             pressure_multiplier,
-            interaction_strength: 5000.,
+            interaction_strength: 3500.,
             interaction_radius: 200.0,
             viscosity_strength,
         }
