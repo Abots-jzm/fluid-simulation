@@ -32,17 +32,29 @@ impl Fluid {
                 }
             }
             _ => {
-                let cols = config.particle_columns;
-                let rows = config.particle_count / cols;
+                let target_aspect_ratio = screen_width() / screen_height();
 
-                let total_width = cols as f32 * config.particle_spacing;
+                let rows: u32;
+                let cols: u32;
+
+                let particle_count_f = config.particle_count as f32;
+
+                let rows_f = (particle_count_f / target_aspect_ratio).sqrt();
+                let cols_f = (particle_count_f * target_aspect_ratio).sqrt();
+                rows = rows_f.round() as u32;
+                cols = cols_f.round() as u32;
+
+                let spacing = config.particle_radius * 2.5;
+
+                let total_width = cols as f32 * spacing;
                 let left_offset = (screen_width() - total_width) / 2.0;
+                let total_height = rows as f32 * spacing;
+                let top_offset = (screen_height() - total_height) / 2.0;
 
                 for i in 0..rows {
                     for j in 0..cols {
-                        let x = left_offset + j as f32 * config.particle_spacing;
-                        let y =
-                            i as f32 * config.particle_spacing + (config.boundary_padding * 2.0);
+                        let x = left_offset + j as f32 * spacing;
+                        let y = i as f32 * spacing + top_offset;
                         particles.push(Particle::new(Vec2::new(x, y), config.particle_radius));
                     }
                 }

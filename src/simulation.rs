@@ -27,7 +27,7 @@ impl Simulation {
 
         Self {
             is_running: true,
-            is_paused: true,
+            is_paused: false,
             config,
             fluid,
             boundary,
