@@ -2,7 +2,7 @@
 
 A 2D fluid simulation implemented in Rust using the Macroquad game engine. This simulation uses Smoothed Particle Hydrodynamics (SPH) to create realistic fluid behavior.
 
-![screen shot](image.png)
+![screen shot](./image.png)
 
 ## Features
 
