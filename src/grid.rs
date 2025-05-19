@@ -26,7 +26,7 @@ impl GridBox {
     }
 
     pub fn draw(&self) {
-        let grid_color = Color::new(0.5, 0.5, 0.5, 0.5);
+        let grid_color = Color::new(0.5, 0.5, 0.5, 0.25);
         let grid_width = self.grid_size;
         let grid_height = self.grid_size;
 

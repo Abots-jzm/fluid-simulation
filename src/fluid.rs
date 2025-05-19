@@ -83,7 +83,7 @@ impl Fluid {
 
     pub fn draw(&self) {
         for particle in self.grid.iter().flat_map(|grid_box| &grid_box.particles) {
-            particle.draw(1000.);
+            particle.draw(750.);
         }
 
         for grid_box in &self.grid {
@@ -165,6 +165,7 @@ impl Fluid {
                         gx,
                         gy,
                         p.radius,
+                        p.velocity, // Added particle velocity
                     )
                 })
             })
@@ -181,6 +182,7 @@ impl Fluid {
                     gx,
                     gy,
                     p_radius,
+                    p_velocity, // Added particle velocity
                 )| {
                     let neighbor_particles = self.get_neighbor_particles(*gx, *gy);
 
@@ -190,17 +192,27 @@ impl Fluid {
                         density: *current_density,
                         id: *current_id,
                         radius: *p_radius,
-                        velocity: Vec2::ZERO,
+                        velocity: *p_velocity, // Use actual particle velocity
                         acceleration: Vec2::ZERO,
                     };
 
-                    self.calculate_pressure_force_on_particle(
+                    let pressure_force = self.calculate_pressure_force_on_particle(
                         &temp_current_particle,
                         &neighbor_particles,
                         config.mass,
                         config.smoothing_radius,
                         config,
-                    )
+                    );
+
+                    let viscosity_force = self.calculate_viscosity_from_neighbors(
+                        &temp_current_particle,
+                        &neighbor_particles,
+                        config.mass,
+                        config.smoothing_radius,
+                        config.viscosity_strength,
+                    );
+
+                    pressure_force + viscosity_force
                 },
             )
             .collect();
@@ -217,6 +229,7 @@ impl Fluid {
             .zip(forces.par_iter())
             .for_each(|(particle, force)| {
                 if particle.density > 0.0 {
+                    // Keeping this check, can be useful
                     particle.acceleration += *force / particle.density;
                 }
             });
@@ -333,6 +346,40 @@ impl Fluid {
             let distance = point.distance(particle.predicted_position);
             density + mass * self.smoothing_kernel(smoothing_radius, distance)
         })
+    }
+
+    pub fn calculate_viscosity_from_neighbors(
+        &self,
+        particle: &Particle,
+        neighbor_particles: &[Particle],
+        mass: f32,
+        smoothing_radius: f32,
+        viscosity_strength: f32,
+    ) -> Vec2 {
+        let mut viscosity_force = Vec2::ZERO;
+        let current_particle_pos = particle.predicted_position;
+
+        for other_particle in neighbor_particles {
+            let distance = current_particle_pos.distance(other_particle.predicted_position);
+            let influence = self.viscosity_kernel(smoothing_radius, distance) * mass;
+            viscosity_force += (other_particle.velocity - particle.velocity) * influence;
+        }
+
+        viscosity_force * viscosity_strength
+    }
+
+    fn viscosity_kernel(&self, radius: f32, distance: f32) -> f32 {
+        if distance > radius {
+            return 0.0;
+        }
+
+        let r_scaled = radius / DISTANCE_ZOOM;
+        let d_scaled = distance / DISTANCE_ZOOM;
+
+        let volume = PI * r_scaled.powi(8) / 4.0;
+        let value = r_scaled.powi(2) - d_scaled.powi(2);
+
+        value * value * value / volume
     }
 
     fn smoothing_kernel(&self, radius: f32, distance: f32) -> f32 {

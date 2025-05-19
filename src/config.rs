@@ -28,6 +28,7 @@ pub struct Config {
     pub pressure_multiplier: f32,
     pub interaction_strength: f32,
     pub interaction_radius: f32,
+    pub viscosity_strength: f32,
 }
 
 impl Config {
@@ -48,12 +49,17 @@ impl Config {
             _ => 150.0,
         };
 
+        let viscosity_strength = match fluid_spawn_mode {
+            FluidSpawnMode::Gravity => 5.,
+            _ => 25.,
+        };
+
         Self {
-            particle_radius: 5.0,
+            particle_radius: 4.,
             particle_count: 1500,
-            particle_spacing: 15.,
+            particle_spacing: 10.,
             particle_columns: 50,
-            boundary_padding: 25.0,
+            boundary_padding: 100.,
             boundary_damping: 0.7,
             gravity,
             mass: 1.0,
@@ -63,6 +69,7 @@ impl Config {
             pressure_multiplier,
             interaction_strength: 5000.,
             interaction_radius: 200.0,
+            viscosity_strength,
         }
     }
 }
