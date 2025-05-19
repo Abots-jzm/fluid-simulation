@@ -2,9 +2,9 @@ use macroquad::prelude::*;
 
 #[allow(dead_code)]
 pub enum FluidSpawnMode {
-    Random,
+    Random, // kinda like gas
     Grid,
-    Gravity,
+    Gravity, // kinda like liquid
 }
 
 #[derive(Clone, Copy, PartialEq)]
