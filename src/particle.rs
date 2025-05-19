@@ -11,6 +11,7 @@ pub struct Particle {
     pub acceleration: Vec2,
     pub radius: f32,
     pub density: f32,
+    pub near_density: f32,
     pub id: Uuid,
 }
 
@@ -23,6 +24,7 @@ impl Particle {
             acceleration: Vec2::ZERO,
             radius,
             density: 0.0,
+            near_density: 0.0,
             id: Uuid::new_v4(),
         }
     }

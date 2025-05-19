@@ -159,11 +159,12 @@ impl Fluid {
                         p.position,
                         p.predicted_position,
                         p.density,
+                        p.near_density,
                         p.id,
                         gx,
                         gy,
                         p.radius,
-                        p.velocity, // Added particle velocity
+                        p.velocity,
                     )
                 })
             })
@@ -176,6 +177,7 @@ impl Fluid {
                     current_pos,
                     predicted_position,
                     current_density,
+                    near_density,
                     current_id,
                     gx,
                     gy,
@@ -188,6 +190,7 @@ impl Fluid {
                         position: *current_pos,
                         predicted_position: *predicted_position,
                         density: *current_density,
+                        near_density: *near_density,
                         id: *current_id,
                         radius: *p_radius,
                         velocity: *p_velocity, // Use actual particle velocity
@@ -308,15 +311,23 @@ impl Fluid {
             })
             .collect();
 
-        let densities: Vec<f32> = particle_infos
+        let densities: Vec<(f32, f32)> = particle_infos
             .par_iter()
             .map(|(predicted_position, gx, gy)| {
                 let neighbor_particles = self.get_neighbor_particles(*gx, *gy);
-                Physics::calculate_density_from_neighbors(
-                    *predicted_position,
-                    &neighbor_particles,
-                    config.mass,
-                    config.smoothing_radius,
+                (
+                    Physics::calculate_density_from_neighbors(
+                        *predicted_position,
+                        &neighbor_particles,
+                        config.mass,
+                        config.smoothing_radius,
+                    ),
+                    Physics::calculate_near_density_from_neighbors(
+                        *predicted_position,
+                        &neighbor_particles,
+                        config.mass,
+                        config.smoothing_radius,
+                    ),
                 )
             })
             .collect();
@@ -325,7 +336,8 @@ impl Fluid {
         for grid_box in &mut self.grid {
             for particle in &mut grid_box.particles {
                 if let Some(&density) = density_iter.next() {
-                    particle.density = density;
+                    particle.density = density.0;
+                    particle.near_density = density.1;
                 } else {
                     eprintln!("Error: Mismatch during density assignment.");
                 }

@@ -26,6 +26,7 @@ pub struct Config {
     pub smoothing_radius: f32,
     pub target_density: f32,
     pub pressure_multiplier: f32,
+    pub near_pressure_multiplier: f32,
     pub interaction_strength: f32,
     pub interaction_radius: f32,
     pub viscosity_strength: f32,
@@ -45,13 +46,23 @@ impl Config {
         };
 
         let pressure_multiplier = match fluid_spawn_mode {
-            FluidSpawnMode::Gravity => 500.0,
+            FluidSpawnMode::Gravity => 750.0,
             _ => 150.0,
         };
 
         let viscosity_strength = match fluid_spawn_mode {
             FluidSpawnMode::Gravity => 5.,
             _ => 10.,
+        };
+
+        let near_pressure_multiplier = match fluid_spawn_mode {
+            FluidSpawnMode::Gravity => 100.0,
+            _ => 0.0,
+        };
+
+        let interaction_strength = match fluid_spawn_mode {
+            FluidSpawnMode::Gravity => 3500.0,
+            _ => 5000.0,
         };
 
         Self {
@@ -67,7 +78,8 @@ impl Config {
             fluid_spawn_mode,
             target_density,
             pressure_multiplier,
-            interaction_strength: 3500.,
+            near_pressure_multiplier,
+            interaction_strength,
             interaction_radius: 200.0,
             viscosity_strength,
         }
