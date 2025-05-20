@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 use rayon::prelude::*;
 
 use crate::{
-    config::{Config, FluidSpawnMode, InteractionType},
+    config::{Config, InteractionType},
     grid::GridCell,
     particle::Particle,
     physics::Physics,
@@ -22,48 +22,30 @@ impl Fluid {
         let screen_height = screen_height();
 
         let mut particles = Vec::with_capacity(config.particle_count as usize);
+        let target_aspect_ratio = screen_width / screen_height;
 
-        match config.fluid_spawn_mode {
-            FluidSpawnMode::Random => {
-                for _ in 0..config.particle_count {
-                    let x = rand::gen_range(
-                        config.boundary_padding + config.particle_radius,
-                        screen_width - config.boundary_padding - config.particle_radius,
-                    );
-                    let y = rand::gen_range(
-                        config.boundary_padding + config.particle_radius,
-                        screen_height - config.boundary_padding - config.particle_radius,
-                    );
-                    particles.push(Particle::new(Vec2::new(x, y), config.particle_radius));
-                }
-            }
-            _ => {
-                let target_aspect_ratio = screen_width / screen_height;
+        let rows: u32;
+        let cols: u32;
 
-                let rows: u32;
-                let cols: u32;
+        let particle_count_f = config.particle_count as f32;
 
-                let particle_count_f = config.particle_count as f32;
+        let rows_f = (particle_count_f / target_aspect_ratio).sqrt();
+        let cols_f = (particle_count_f * target_aspect_ratio).sqrt();
+        rows = rows_f.round() as u32;
+        cols = cols_f.round() as u32;
 
-                let rows_f = (particle_count_f / target_aspect_ratio).sqrt();
-                let cols_f = (particle_count_f * target_aspect_ratio).sqrt();
-                rows = rows_f.round() as u32;
-                cols = cols_f.round() as u32;
+        let spacing = config.particle_radius * 2.5;
 
-                let spacing = config.particle_radius * 2.5;
+        let total_width = cols as f32 * spacing;
+        let left_offset = (screen_width - total_width) / 2.0;
+        let total_height = rows as f32 * spacing;
+        let top_offset = (screen_height - total_height) / 2.0;
 
-                let total_width = cols as f32 * spacing;
-                let left_offset = (screen_width - total_width) / 2.0;
-                let total_height = rows as f32 * spacing;
-                let top_offset = (screen_height - total_height) / 2.0;
-
-                for i in 0..rows {
-                    for j in 0..cols {
-                        let x = left_offset + j as f32 * spacing;
-                        let y = i as f32 * spacing + top_offset;
-                        particles.push(Particle::new(Vec2::new(x, y), config.particle_radius));
-                    }
-                }
+        for i in 0..rows {
+            for j in 0..cols {
+                let x = left_offset + j as f32 * spacing;
+                let y = i as f32 * spacing + top_offset;
+                particles.push(Particle::new(Vec2::new(x, y), config.particle_radius));
             }
         }
 
