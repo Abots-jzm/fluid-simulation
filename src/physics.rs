@@ -118,65 +118,79 @@ impl Physics {
 
     pub fn calculate_density_from_neighbors(
         point: Vec2,
-        neighbor_particles: &[Particle],
+        neighbor_particle_indices: &[usize],
+        particles: &[Particle],
         mass: f32,
         smoothing_radius: f32,
     ) -> f32 {
-        neighbor_particles.iter().fold(0.0, |density, particle| {
-            let distance = point.distance(particle.predicted_position);
-            density + mass * Self::density_kernel(smoothing_radius, distance)
-        })
+        neighbor_particle_indices
+            .iter()
+            .fold(0.0, |density, &neighbor_index| {
+                let distance = point.distance(particles[neighbor_index].predicted_position);
+                density + mass * Self::density_kernel(smoothing_radius, distance)
+            })
     }
 
     pub fn calculate_near_density_from_neighbors(
         point: Vec2,
-        neighbor_particles: &[Particle],
+        neighbor_particle_indices: &[usize],
+        particles: &[Particle],
         mass: f32,
         smoothing_radius: f32,
     ) -> f32 {
-        neighbor_particles
+        neighbor_particle_indices
             .iter()
-            .fold(0.0, |near_density, particle| {
-                let distance = point.distance(particle.predicted_position);
+            .fold(0.0, |near_density, &neighbor_index| {
+                let distance = point.distance(particles[neighbor_index].predicted_position);
                 near_density + mass * Self::near_density_kernel(smoothing_radius, distance)
             })
     }
 
     pub fn calculate_viscosity_from_neighbors(
-        particle: &Particle,
-        neighbor_particles: &[Particle],
+        current_index: usize,
+        neighbor_indices: &[usize],
+        particles: &[Particle],
         mass: f32,
         smoothing_radius: f32,
         viscosity_strength: f32,
     ) -> Vec2 {
         let mut viscosity_force = Vec2::ZERO;
-        let current_particle_pos = particle.predicted_position;
+        let current_particle = &particles[current_index];
+        let current_particle_pos = current_particle.predicted_position;
 
-        for other_particle in neighbor_particles {
+        for &other_particle in neighbor_indices {
+            if other_particle == current_index {
+                continue;
+            }
+
+            let other_particle = &particles[other_particle];
             let distance = current_particle_pos.distance(other_particle.predicted_position);
             let influence = Self::viscosity_kernel(smoothing_radius, distance) * mass;
-            viscosity_force += (other_particle.velocity - particle.velocity) * influence;
+            viscosity_force += (other_particle.velocity - current_particle.velocity) * influence;
         }
 
         viscosity_force * viscosity_strength
     }
 
     pub fn calculate_pressure_force_on_particle(
-        current_particle: &Particle,
-        neighbor_particles: &[Particle],
+        current_index: usize,
+        neighbor_indices: &[usize],
+        particles: &[Particle],
         mass: f32,
         radius: f32,
         config: &Config,
     ) -> Vec2 {
         let mut pressure_force = Vec2::ZERO;
+        let current_particle = &particles[current_index];
         let current_particle_pos = current_particle.predicted_position;
         let current_particle_density = current_particle.density;
 
-        for other_particle in neighbor_particles {
-            if other_particle.id == current_particle.id {
+        for &other_particle in neighbor_indices {
+            if other_particle == current_index {
                 continue;
             }
 
+            let other_particle = &particles[other_particle];
             let distance = current_particle_pos.distance(other_particle.predicted_position);
             if distance == 0.0 || distance > radius {
                 continue;

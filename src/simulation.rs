@@ -86,14 +86,7 @@ impl Simulation {
             }
         }
 
-        let mut particles = Vec::new();
-        for grid in &mut self.fluid.grid {
-            for particle in &mut grid.particles {
-                particles.push(particle);
-            }
-        }
-
-        self.boundary.check_collision(&mut particles);
+        self.boundary.check_collision(&mut self.fluid.particles);
     }
 
     pub fn render(&self) {

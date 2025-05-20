@@ -1,9 +1,7 @@
 use macroquad::prelude::*;
 
 use crate::simulation::DISTANCE_ZOOM;
-use uuid::Uuid;
 
-#[derive(Clone)]
 pub struct Particle {
     pub position: Vec2,
     pub predicted_position: Vec2,
@@ -12,7 +10,6 @@ pub struct Particle {
     pub radius: f32,
     pub density: f32,
     pub near_density: f32,
-    pub id: Uuid,
 }
 
 impl Particle {
@@ -25,7 +22,6 @@ impl Particle {
             radius,
             density: 0.0,
             near_density: 0.0,
-            id: Uuid::new_v4(),
         }
     }
 

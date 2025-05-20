@@ -27,7 +27,7 @@ impl Boundary {
         draw_rectangle_lines(self.pos.x, self.pos.y, self.width, self.height, 1., WHITE);
     }
 
-    pub fn check_collision(&self, particles: &mut Vec<&mut Particle>) {
+    pub fn check_collision(&self, particles: &mut [Particle]) {
         for particle in particles.iter_mut() {
             // Left boundary
             if particle.position.x <= self.pos.x + particle.radius {
