@@ -386,9 +386,16 @@ impl Fluid {
             if sqr_dist < radius * radius && sqr_dist > 1e-6 {
                 let dist = sqr_dist.sqrt();
 
-                let dir_to_input_point = offset / dist;
+                let centre_t = if config.fluid_spawn_mode == FluidSpawnMode::Liquid {
+                    let normalized_dist = dist / radius;
+                    const FALLOFF_EXPONENT: f32 = 6.0;
+                    let centre_t = 1.0 - normalized_dist.powf(FALLOFF_EXPONENT);
+                    centre_t.max(0.0)
+                } else {
+                    1.0 - dist / radius
+                };
 
-                let centre_t = 1.0 - dist / radius;
+                let dir_to_input_point = offset / dist;
 
                 let base_force_dir = match interaction_type {
                     InteractionType::Pull => dir_to_input_point,

@@ -62,7 +62,7 @@ impl Config {
         };
 
         let interaction_strength = match fluid_spawn_mode {
-            FluidSpawnMode::Liquid => 3500.0,
+            FluidSpawnMode::Liquid => 2500.0,
             FluidSpawnMode::Gas => 5000.0,
         };
 
