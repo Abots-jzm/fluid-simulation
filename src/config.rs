@@ -2,9 +2,16 @@ use macroquad::prelude::*;
 
 #[allow(dead_code)]
 #[derive(PartialEq)]
-pub enum FluidSpawnMode {
+pub enum FluidType {
     Gas,
     Liquid,
+}
+
+#[allow(dead_code)]
+#[derive(PartialEq)]
+pub enum FluidSpawnMode {
+    Grid,
+    Flow,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -29,41 +36,45 @@ pub struct Config {
     pub target_ghost_spacing: f32,
     pub start_ghost_spacing_multiplier: f32,
     pub ghost_wall_start_percent: f32,
+    pub fluid_type: FluidType,
     pub fluid_spawn_mode: FluidSpawnMode,
+    pub flow_spawn_rate: f32,
+    pub flow_spawn_width: f32,
 }
 
 impl Config {
     pub fn new() -> Self {
-        let fluid_spawn_mode = FluidSpawnMode::Liquid;
+        let fluid_type = FluidType::Liquid;
+        let fluid_spawn_mode = FluidSpawnMode::Flow;
 
-        let gravity = match fluid_spawn_mode {
-            FluidSpawnMode::Liquid => Vec2::new(0.0, 1.),
-            FluidSpawnMode::Gas => Vec2::new(0.0, 0.0),
+        let gravity = match fluid_type {
+            FluidType::Liquid => Vec2::new(0.0, 1.),
+            FluidType::Gas => Vec2::new(0.0, 0.0),
         };
 
-        let target_density = match fluid_spawn_mode {
-            FluidSpawnMode::Liquid => 5000.,
-            FluidSpawnMode::Gas => 150.0,
+        let target_density = match fluid_type {
+            FluidType::Liquid => 5000.,
+            FluidType::Gas => 150.0,
         };
 
-        let pressure_multiplier = match fluid_spawn_mode {
-            FluidSpawnMode::Liquid => 750.0,
-            FluidSpawnMode::Gas => 150.0,
+        let pressure_multiplier = match fluid_type {
+            FluidType::Liquid => 750.0,
+            FluidType::Gas => 150.0,
         };
 
-        let viscosity_strength = match fluid_spawn_mode {
-            FluidSpawnMode::Liquid => 3.,
-            FluidSpawnMode::Gas => 5.,
+        let viscosity_strength = match fluid_type {
+            FluidType::Liquid => 3.,
+            FluidType::Gas => 5.,
         };
 
-        let near_pressure_multiplier = match fluid_spawn_mode {
-            FluidSpawnMode::Liquid => 100.0,
-            FluidSpawnMode::Gas => 0.0,
+        let near_pressure_multiplier = match fluid_type {
+            FluidType::Liquid => 100.0,
+            FluidType::Gas => 0.0,
         };
 
-        let interaction_strength = match fluid_spawn_mode {
-            FluidSpawnMode::Liquid => 2500.0,
-            FluidSpawnMode::Gas => 5000.0,
+        let interaction_strength = match fluid_type {
+            FluidType::Liquid => 2500.0,
+            FluidType::Gas => 5000.0,
         };
 
         Self {
@@ -82,7 +93,10 @@ impl Config {
             target_ghost_spacing: 3.,
             start_ghost_spacing_multiplier: 2.6,
             ghost_wall_start_percent: 0.6,
+            fluid_type,
             fluid_spawn_mode,
+            flow_spawn_rate: 100.,
+            flow_spawn_width: 120.,
         }
     }
 }

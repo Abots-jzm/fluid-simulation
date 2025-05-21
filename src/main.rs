@@ -7,6 +7,7 @@ mod grid;
 mod particle;
 mod physics;
 mod simulation;
+mod spawner;
 
 use crate::simulation::Simulation;
 fn window_conf() -> Conf {
