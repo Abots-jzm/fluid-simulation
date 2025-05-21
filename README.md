@@ -6,7 +6,8 @@ A 2D fluid simulation implemented in Rust using the Macroquad game engine. This 
 
 ## Features
 
-- Multiple fluid spawn modes: Random, Grid, and Gravity
+- Multiple fluid spawn modes: Grid, and Flow
+- Multiple fluid types: Liquid and Gas
 - Interactive fluid manipulation (push and pull)
 - Real-time physics simulation
 - Configurable parameters for fluid behavior
@@ -21,7 +22,9 @@ A 2D fluid simulation implemented in Rust using the Macroquad game engine. This 
 
 - [macroquad](https://github.com/not-fl3/macroquad) (0.4.14) - A cross-platform game engine
 - [rayon](https://github.com/rayon-rs/rayon) (1.10.0) - Data parallelism library
-- [uuid](https://github.com/uuid-rs/uuid) (1.16.0) - UUID generation
+- [clap](https://github.com/clap-rs/clap) (4.5.4) - Command Line Argument Parser
+- [serde](https://github.com/serde-rs/serde) (1.0) - Serialization/deserialization framework
+- [toml](https://github.com/toml-rs/toml) (0.8.13) - TOML parsing library
 
 ## Installation
 
@@ -49,15 +52,32 @@ A 2D fluid simulation implemented in Rust using the Macroquad game engine. This 
 
 ## Configuration
 
-The simulation behavior can be customized by modifying the `Config` struct in `config.rs`. Key parameters include:
+The simulation behavior can be customized by modifying the `config.toml` file or by using command-line arguments.
+
+Key parameters in `config.toml` (found in the `Config` struct in `src/config.rs`):
 
 - `particle_radius`: Size of each fluid particle
 - `particle_count`: Total number of particles in the simulation
-- `fluid_spawn_mode`: Initial distribution of particles (Random, Grid, Gravity)
+- `fluid_type`: Type of fluid (Liquid, Gas) - can be overridden by `--fluid-type` or `-f` CLI argument.
+- `fluid_spawn_mode`: Initial distribution of particles (Grid, Flow) - can be overridden by `--spawn-mode` or `-s` CLI argument.
 - `gravity`: Force applied to particles
 - `smoothing_radius`: Radius used for particle interactions
 - `pressure_multiplier`: Strength of pressure forces
 - `viscosity_strength`: Fluid thickness/stickiness
+- `liquid`: Specific parameters for liquid fluid type.
+- `gas`: Specific parameters for gas fluid type.
+
+Command-line arguments can override settings from `config.toml`:
+
+- `--fluid-type <TYPE>` or `-f <TYPE>`: Set the fluid type (e.g., `liquid`, `gas`).
+- `--spawn-mode <MODE>` or `-s <MODE>`: Set the spawn mode (e.g., `grid`, `flow`).
+- `--config-file <PATH>`: Specify a custom path for the configuration file (defaults to `config.toml`).
+
+Example:
+
+```bash
+cargo run --release -- --fluid-type liquid --spawn-mode flow
+```
 
 ## How It Works
 
