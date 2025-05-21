@@ -10,10 +10,11 @@ pub struct Particle {
     pub radius: f32,
     pub density: f32,
     pub near_density: f32,
+    pub is_ghost: bool,
 }
 
 impl Particle {
-    pub fn new(position: Vec2, radius: f32) -> Self {
+    pub fn new(position: Vec2, radius: f32, is_ghost: bool) -> Self {
         Self {
             position,
             predicted_position: position,
@@ -22,10 +23,15 @@ impl Particle {
             radius,
             density: 0.0,
             near_density: 0.0,
+            is_ghost,
         }
     }
 
     pub fn draw(&self, max_speed: f32) {
+        if self.is_ghost {
+            return;
+        }
+
         let speed = self.velocity.length();
 
         let normalized_speed = (speed / max_speed).min(1.0);
@@ -53,6 +59,10 @@ impl Particle {
     }
 
     pub fn update(&mut self, delta_time: f32, gravity: Vec2) {
+        if self.is_ghost {
+            return;
+        }
+
         self.acceleration += gravity * DISTANCE_ZOOM;
         self.velocity += self.acceleration * delta_time;
         self.position += self.velocity * delta_time;

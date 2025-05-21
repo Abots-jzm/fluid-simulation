@@ -1,6 +1,7 @@
 use macroquad::prelude::*;
 
 #[allow(dead_code)]
+#[derive(PartialEq)]
 pub enum FluidSpawnMode {
     Gas,
     Liquid,
@@ -15,7 +16,6 @@ pub enum InteractionType {
 pub struct Config {
     pub particle_radius: f32,
     pub particle_count: u32,
-    pub boundary_padding: f32,
     pub boundary_damping: f32,
     pub gravity: Vec2,
     pub mass: f32,
@@ -26,6 +26,10 @@ pub struct Config {
     pub interaction_strength: f32,
     pub interaction_radius: f32,
     pub viscosity_strength: f32,
+    pub target_ghost_spacing: f32,
+    pub start_ghost_spacing_multiplier: f32,
+    pub ghost_wall_start_percent: f32,
+    pub fluid_spawn_mode: FluidSpawnMode,
 }
 
 impl Config {
@@ -65,7 +69,6 @@ impl Config {
         Self {
             particle_radius: 3.,
             particle_count: 3000,
-            boundary_padding: 20.,
             boundary_damping: 0.7,
             gravity,
             mass: 1.0,
@@ -76,6 +79,10 @@ impl Config {
             interaction_strength,
             interaction_radius: 200.0,
             viscosity_strength,
+            target_ghost_spacing: 3.,
+            start_ghost_spacing_multiplier: 2.6,
+            ghost_wall_start_percent: 0.6,
+            fluid_spawn_mode,
         }
     }
 }

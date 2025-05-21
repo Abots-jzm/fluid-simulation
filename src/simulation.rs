@@ -22,8 +22,8 @@ impl Simulation {
     pub fn new() -> Self {
         let config = Config::new();
 
-        let fluid = Fluid::from_config(&config);
-        let boundary = Boundary::new(config.boundary_padding, config.boundary_damping);
+        let boundary = Boundary::new(config.boundary_damping, config.smoothing_radius);
+        let fluid = Fluid::from_config(&config, &boundary);
 
         Self {
             is_running: true,

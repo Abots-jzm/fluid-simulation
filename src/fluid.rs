@@ -2,7 +2,8 @@ use macroquad::prelude::*;
 use rayon::prelude::*;
 
 use crate::{
-    config::{Config, InteractionType},
+    boundary::Boundary,
+    config::{Config, FluidSpawnMode, InteractionType},
     grid::GridCell,
     particle::Particle,
     physics::Physics,
@@ -14,15 +15,19 @@ pub struct Fluid {
     grid_cols: usize,
     grid_rows: usize,
     grid_size: f32,
+    map_width: f32,
+    map_height: f32,
+    screen_width: f32,
+    screen_height: f32,
 }
 
 impl Fluid {
-    pub fn from_config(config: &Config) -> Self {
-        let screen_width = screen_width();
-        let screen_height = screen_height();
+    pub fn from_config(config: &Config, boundary: &Boundary) -> Self {
+        let map_width = boundary.width + config.smoothing_radius * 2.;
+        let map_height = boundary.height + config.smoothing_radius * 2.;
 
         let mut particles = Vec::with_capacity(config.particle_count as usize);
-        let target_aspect_ratio = screen_width / screen_height;
+        let target_aspect_ratio = map_width / map_height;
 
         let rows: u32;
         let cols: u32;
@@ -37,34 +42,152 @@ impl Fluid {
         let spacing = config.particle_radius * 2.5;
 
         let total_width = cols as f32 * spacing;
-        let left_offset = (screen_width - total_width) / 2.0;
+        let left_offset = (map_width - total_width) / 2.0;
         let total_height = rows as f32 * spacing;
-        let top_offset = (screen_height - total_height) / 2.0;
+        let top_offset = (map_height - total_height) / 2.0;
 
         for i in 0..rows {
             for j in 0..cols {
                 let x = left_offset + j as f32 * spacing;
                 let y = i as f32 * spacing + top_offset;
-                particles.push(Particle::new(Vec2::new(x, y), config.particle_radius));
+                particles.push(Particle::new(
+                    Vec2::new(x, y),
+                    config.particle_radius,
+                    false,
+                ));
             }
         }
 
         let grid_size = config.smoothing_radius;
-        let grid_cols = (screen_width / grid_size).ceil() as usize;
-        let grid_rows = (screen_height / grid_size).ceil() as usize;
+        let mut grid_cols = (boundary.width / grid_size).ceil() as usize;
+        let mut grid_rows = (boundary.height / grid_size).ceil() as usize;
 
-        let mut grid = Vec::with_capacity(grid_cols * grid_rows);
+        let mut grid: Vec<GridCell> = Vec::with_capacity(grid_cols * grid_rows);
         for i in 0..grid_rows {
             for j in 0..grid_cols {
-                let x = j as f32 * grid_size;
-                let y = i as f32 * grid_size;
+                let x = j as f32 * grid_size + boundary.pos.x;
+                let y = i as f32 * grid_size + boundary.pos.y;
                 grid.push(GridCell::new(grid_size, Vec2::new(x, y)));
             }
         }
 
+        if config.fluid_spawn_mode == FluidSpawnMode::Liquid {
+            // Create ghost grid cells
+            let mut ghost_grid = Vec::new();
+            let extended_grid_cols = grid_cols + 2;
+            let extended_grid_rows = grid_rows + 2;
+            let ghost_layer_origin_x = boundary.pos.x - grid_size;
+            let ghost_layer_origin_y = boundary.pos.y - grid_size;
+
+            for r in 0..extended_grid_rows {
+                for c in 0..extended_grid_cols {
+                    // Only add cells that are on the outer-most layer
+                    if r == 0
+                        || r == extended_grid_rows - 1
+                        || c == 0
+                        || c == extended_grid_cols - 1
+                    {
+                        let x = c as f32 * grid_size + ghost_layer_origin_x;
+                        let y = r as f32 * grid_size + ghost_layer_origin_y;
+                        ghost_grid.push(GridCell::new(grid_size, Vec2::new(x, y)));
+                    }
+                }
+            }
+
+            // Ghost particles
+            let mut ghost_particles: Vec<Particle> = Vec::new();
+
+            let left_boundary_x = boundary.pos.x - grid_size;
+            let right_boundary_x = boundary.pos.x + (grid_cols as f32 * grid_size);
+            let top_boundary_y = boundary.pos.y - grid_size;
+            let bottom_boundary_y = boundary.pos.y + (grid_rows as f32 * grid_size);
+
+            let extended_grid_rows_f = extended_grid_rows as f32;
+
+            for ghost_cell in &ghost_grid {
+                let cell_x = ghost_cell.position.x;
+                let cell_y = ghost_cell.position.y;
+
+                let is_on_top_boundary = (cell_y - top_boundary_y).abs() < f32::EPSILON;
+                if is_on_top_boundary {
+                    continue;
+                }
+
+                let is_on_left_boundary = (cell_x - left_boundary_x).abs() < f32::EPSILON;
+                let is_on_right_boundary = (cell_x - right_boundary_x).abs() < f32::EPSILON;
+
+                // skip particles before target percent
+                if is_on_left_boundary || is_on_right_boundary {
+                    // Normalized so 0 at top and 1 at bottom
+                    let norm_y_in_col =
+                        ((cell_y - top_boundary_y) / grid_size) / (extended_grid_rows_f - 1.0);
+                    if norm_y_in_col < config.ghost_wall_start_percent {
+                        continue;
+                    }
+                }
+
+                let spacing_factor = {
+                    let is_on_bottom_boundary = (cell_y - bottom_boundary_y).abs() < f32::EPSILON;
+                    if is_on_bottom_boundary {
+                        1.0
+                    } else if is_on_left_boundary || is_on_right_boundary {
+                        let norm_y_in_col =
+                            ((cell_y - top_boundary_y) / grid_size) / (extended_grid_rows_f - 1.0);
+                        let interp_t = (norm_y_in_col - 0.5).max(0.0) * 2.0;
+                        config.start_ghost_spacing_multiplier * (1.0 - interp_t) + interp_t
+                    } else {
+                        // Should not be reachable
+                        1.0
+                    }
+                };
+
+                let current_spacing =
+                    config.particle_radius * config.target_ghost_spacing * spacing_factor;
+
+                let count_x = (grid_size / current_spacing).floor() as u32;
+                let count_y = (grid_size / current_spacing).floor() as u32;
+
+                if count_x == 0 || count_y == 0 {
+                    continue;
+                }
+
+                let margin_x = (grid_size - (count_x as f32 * current_spacing)) / 2.0;
+                let margin_y = (grid_size - (count_y as f32 * current_spacing)) / 2.0;
+
+                for i in 0..count_y {
+                    for j in 0..count_x {
+                        let px =
+                            ghost_cell.position.x + margin_x + (j as f32 + 0.5) * current_spacing;
+                        let py =
+                            ghost_cell.position.y + margin_y + (i as f32 + 0.5) * current_spacing;
+                        ghost_particles.push(Particle::new(
+                            Vec2::new(px, py),
+                            config.particle_radius,
+                            true,
+                        ));
+                    }
+                }
+            }
+
+            grid.extend(ghost_grid);
+            grid_cols += 2;
+            grid_rows += 2;
+            particles.extend(ghost_particles);
+
+            grid.sort_by(|a, b| {
+                if a.position.y == b.position.y {
+                    a.position.x.partial_cmp(&b.position.x).unwrap()
+                } else {
+                    a.position.y.partial_cmp(&b.position.y).unwrap()
+                }
+            });
+        }
+
         for (index, particle) in particles.iter().enumerate() {
-            let grid_x = (particle.position.x / grid_size).floor() as usize;
-            let grid_y = (particle.position.y / grid_size).floor() as usize;
+            let offset_x = (screen_width() - map_width) / 2.;
+            let offset_y = (screen_height() - map_height) / 2.;
+            let grid_x = ((particle.position.x - offset_x) / grid_size).floor() as usize;
+            let grid_y = ((particle.position.y - offset_y) / grid_size).floor() as usize;
             let grid_index = grid_y * grid_cols + grid_x;
 
             if grid_index < grid.len() {
@@ -78,6 +201,10 @@ impl Fluid {
             grid_cols,
             grid_rows,
             grid_size,
+            map_width,
+            map_height,
+            screen_width: screen_width(),
+            screen_height: screen_height(),
         }
     }
 
@@ -92,8 +219,10 @@ impl Fluid {
     }
 
     fn get_grid_coords(&self, position: Vec2) -> (usize, usize) {
-        let mut grid_x = (position.x / self.grid_size).floor() as usize;
-        let mut grid_y = (position.y / self.grid_size).floor() as usize;
+        let offset_x = (self.screen_width - self.map_width) / 2.;
+        let offset_y = (self.screen_height - self.map_height) / 2.;
+        let mut grid_x = ((position.x - offset_x) / self.grid_size).floor() as usize;
+        let mut grid_y = ((position.y - offset_y) / self.grid_size).floor() as usize;
 
         grid_x = grid_x.min(self.grid_cols.saturating_sub(1));
         grid_y = grid_y.min(self.grid_rows.saturating_sub(1));

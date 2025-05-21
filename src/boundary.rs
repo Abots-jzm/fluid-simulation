@@ -3,17 +3,21 @@ use macroquad::prelude::*;
 use crate::particle::Particle;
 
 pub struct Boundary {
-    pos: Vec2,
-    width: f32,
-    height: f32,
+    pub pos: Vec2,
+    pub width: f32,
+    pub height: f32,
     damping: f32,
 }
 
 impl Boundary {
-    pub fn new(padding: f32, damping: f32) -> Self {
-        let width = screen_width() - padding * 2.0;
-        let height = screen_height() - padding * 2.0;
-        let pos = Vec2::new(padding, padding);
+    pub fn new(damping: f32, grid_size: f32) -> Self {
+        // Make width and height multiples of grid_size
+        let width = ((screen_width() / grid_size).floor() * grid_size) - grid_size * 2.;
+        let height = ((screen_height() / grid_size).floor() * grid_size) - grid_size * 2.;
+        let pos = Vec2::new(
+            (screen_width() - width) / 2.0,
+            (screen_height() - height) / 2.0,
+        );
 
         Self {
             pos,
@@ -29,6 +33,10 @@ impl Boundary {
 
     pub fn check_collision(&self, particles: &mut [Particle]) {
         for particle in particles.iter_mut() {
+            if particle.is_ghost {
+                continue;
+            }
+
             // Left boundary
             if particle.position.x <= self.pos.x + particle.radius {
                 particle.position.x = self.pos.x + particle.radius;
