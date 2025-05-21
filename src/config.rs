@@ -1,38 +1,72 @@
+use clap::ValueEnum;
 use macroquad::prelude::*;
+use serde::Deserialize;
+
+#[derive(Deserialize, Debug, Clone, Copy)]
+pub struct SerializableVec2 {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl From<SerializableVec2> for Vec2 {
+    fn from(sv: SerializableVec2) -> Self {
+        Vec2::new(sv.x, sv.y)
+    }
+}
 
 #[allow(dead_code)]
-#[derive(PartialEq)]
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, ValueEnum)]
 pub enum FluidType {
     Gas,
     Liquid,
 }
 
 #[allow(dead_code)]
-#[derive(PartialEq)]
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, ValueEnum)]
 pub enum FluidSpawnMode {
     Grid,
     Flow,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Deserialize, Debug)]
 pub enum InteractionType {
     Pull,
     Push,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct FluidTypeSpecifics {
+    pub gravity: SerializableVec2,
+    pub target_density: f32,
+    pub pressure_multiplier: f32,
+    pub near_pressure_multiplier: f32,
+    pub viscosity_strength: f32,
+    pub interaction_strength: f32,
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct Config {
     pub particle_radius: f32,
     pub particle_count: u32,
     pub boundary_damping: f32,
-    pub gravity: Vec2,
     pub mass: f32,
     pub smoothing_radius: f32,
-    pub target_density: f32,
-    pub pressure_multiplier: f32,
-    pub near_pressure_multiplier: f32,
-    pub interaction_strength: f32,
     pub interaction_radius: f32,
+
+    // Active parameters (populated by adapt_to_fluid_type)
+    #[serde(skip)]
+    pub gravity: Vec2,
+    #[serde(skip)]
+    pub target_density: f32,
+    #[serde(skip)]
+    pub pressure_multiplier: f32,
+    #[serde(skip)]
+    pub near_pressure_multiplier: f32,
+    #[serde(skip)]
     pub viscosity_strength: f32,
+    #[serde(skip)]
+    pub interaction_strength: f32,
+
     pub target_ghost_spacing: f32,
     pub start_ghost_spacing_multiplier: f32,
     pub ghost_wall_start_percent: f32,
@@ -40,63 +74,22 @@ pub struct Config {
     pub fluid_spawn_mode: FluidSpawnMode,
     pub flow_spawn_rate: f32,
     pub flow_spawn_width: f32,
+    pub liquid: FluidTypeSpecifics,
+    pub gas: FluidTypeSpecifics,
 }
 
 impl Config {
-    pub fn new() -> Self {
-        let fluid_type = FluidType::Liquid;
-        let fluid_spawn_mode = FluidSpawnMode::Flow;
-
-        let gravity = match fluid_type {
-            FluidType::Liquid => Vec2::new(0.0, 1.),
-            FluidType::Gas => Vec2::new(0.0, 0.0),
+    pub fn adapt_to_fluid_type(&mut self) {
+        let specifics = match self.fluid_type {
+            FluidType::Liquid => &self.liquid,
+            FluidType::Gas => &self.gas,
         };
 
-        let target_density = match fluid_type {
-            FluidType::Liquid => 5000.,
-            FluidType::Gas => 150.0,
-        };
-
-        let pressure_multiplier = match fluid_type {
-            FluidType::Liquid => 750.0,
-            FluidType::Gas => 150.0,
-        };
-
-        let viscosity_strength = match fluid_type {
-            FluidType::Liquid => 3.,
-            FluidType::Gas => 5.,
-        };
-
-        let near_pressure_multiplier = match fluid_type {
-            FluidType::Liquid => 100.0,
-            FluidType::Gas => 0.0,
-        };
-
-        let interaction_strength = match fluid_type {
-            FluidType::Liquid => 2500.0,
-            FluidType::Gas => 5000.0,
-        };
-
-        Self {
-            particle_radius: 3.,
-            particle_count: 3000,
-            boundary_damping: 0.7,
-            gravity,
-            mass: 1.0,
-            smoothing_radius: 40.0,
-            target_density,
-            pressure_multiplier,
-            near_pressure_multiplier,
-            interaction_strength,
-            interaction_radius: 200.0,
-            viscosity_strength,
-            target_ghost_spacing: 3.,
-            start_ghost_spacing_multiplier: 2.6,
-            ghost_wall_start_percent: 0.6,
-            fluid_type,
-            fluid_spawn_mode,
-            flow_spawn_rate: 100.,
-            flow_spawn_width: 120.,
-        }
+        self.gravity = specifics.gravity.into();
+        self.target_density = specifics.target_density;
+        self.pressure_multiplier = specifics.pressure_multiplier;
+        self.near_pressure_multiplier = specifics.near_pressure_multiplier;
+        self.viscosity_strength = specifics.viscosity_strength;
+        self.interaction_strength = specifics.interaction_strength;
     }
 }

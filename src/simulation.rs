@@ -19,9 +19,7 @@ pub struct Simulation {
 }
 
 impl Simulation {
-    pub fn new() -> Self {
-        let config = Config::new();
-
+    pub fn new(config: Config) -> Self {
         let boundary = Boundary::new(config.boundary_damping, config.smoothing_radius);
         let fluid = Fluid::from_config(&config, &boundary);
 
